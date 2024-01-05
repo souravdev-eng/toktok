@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/gin-gonic/gin"
 	"github.com/souravdev-eng/toktok-api/pkg/config"
@@ -10,7 +11,13 @@ import (
 )
 
 func main() {
-	utils.LoadEnv()
+	err := utils.LoadEnv()
+
+	if err != nil {
+		log.Panic("env file not able to load")
+		return
+	}
+
 	port := utils.GetEnvValue("PORT")
 
 	server := gin.Default()

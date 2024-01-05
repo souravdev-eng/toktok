@@ -9,6 +9,10 @@ import (
 func ConnectDB() (*mongo.Client, error) {
 	MONGO_URI := utils.GetEnvValue("MONGO_URI")
 
+	// if MONGO_URI != "" {
+	// 	fmt.Println(MONGO_URI)
+	// 	return nil, errors.New("DB url not able to load")
+	// }
 	clientOption := options.Client().ApplyURI(MONGO_URI)
 
 	client, err := mongo.Connect(nil, clientOption)
