@@ -15,7 +15,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"golang.org/x/crypto/bcrypt"
 )
 
 var userCollection *mongo.Collection = db.OpenCollection(db.Client, "user")
@@ -24,72 +23,69 @@ var validate = validator.New()
 
 func SignUp() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		var error []string
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+		defer cancel()
+
 		var user models.User
 
-		defer cancel()
-
-		//convert the JSON data coming from postman to something that golang understands
+		//1. Convert the JSON data coming from clients
 		if err := c.BindJSON(&user); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			error = append(error, err.Error())
+			c.JSON(http.StatusBadRequest, gin.H{"error": error})
 			return
 		}
-		//validate the data based on user struct
 
-		validationErr := validate.Struct(user)
-		if validationErr != nil {
-			var errors []string
-			for _, err := range validationErr.(validator.ValidationErrors) {
-				errors = append(errors, getErrorMessage(err))
+		//2. validate the data based on user struct
+		if validateErr := validate.Struct(user); validateErr != nil {
+
+			for _, err := range validateErr.(validator.ValidationErrors) {
+				error = append(error, getErrorMessage(err))
 			}
-			c.JSON(http.StatusBadRequest, gin.H{"error": errors})
+			c.JSON(http.StatusBadRequest, gin.H{"error": error})
 			return
 		}
-		//you'll check if the email has already been used by another user
 
-		count, err := userCollection.CountDocuments(ctx, bson.M{"email": user.Email})
-		defer cancel()
-
+		//3. you'll check if the email has already been used by another user
+		emailExistCount, err := userCollection.CountDocuments(ctx, bson.M{"email": user.Email})
 		if err != nil {
 			log.Panic(err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "error occurred while checking for the email"})
+			error = append(error, "Oops! Error occurred while checking for the email")
+			c.JSON(http.StatusBadRequest, gin.H{"error": error})
 			return
 		}
-		//hash password
 
-		password := HashPassword(*user.Password)
+		if emailExistCount > 0 {
+			error = append(error, "Oops! Email already exist. Please try a different one.")
+			c.JSON(http.StatusBadRequest, gin.H{"error": error})
+			return
+		}
+		// 4. Hash the password
+		password := helper.HashPassword(*user.Password)
+
+		// 5. Update the user password to the encrypt
 		user.Password = &password
 
-		//you'll also check if the phone no. has already been used by another user
-
-		if count > 0 {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "This email already exists"})
-			return
-		}
-
-		//create some extra details for the user object - created_at, updated_at, ID
-
+		// 6. Create extra details for user object
 		user.Created_at, _ = time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
 		user.Updated_at, _ = time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
 		user.ID = primitive.NewObjectID()
 		user.User_id = user.ID.Hex()
 
-		//generate token and refersh token (generate all tokens function from helper)
-
+		// 7. Generate token and refresh token
 		token, refreshToken, _ := helper.GenerateAllTokens(*user.Email, *user.Name, user.User_id)
 		user.Token = &token
 		user.Refresh_Token = &refreshToken
-		//if all ok, then you insert this new user into the user collection
 
+		// 8. If all ok, then insert into db
 		resultInsertionNumber, insertErr := userCollection.InsertOne(ctx, user)
 		if insertErr != nil {
-			msg := fmt.Sprintf("User item was not created")
-			c.JSON(http.StatusInternalServerError, gin.H{"error": msg})
+			error = append(error, fmt.Sprintf("User item was not created"))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": error})
 			return
 		}
-		defer cancel()
-		//return status OK and send the result back
 
+		//9. Return status OK and send the result back
 		c.JSON(http.StatusOK, resultInsertionNumber)
 	}
 }
@@ -105,12 +101,4 @@ func getErrorMessage(err validator.FieldError) string {
 	default:
 		return err.Error()
 	}
-}
-func HashPassword(password string) string {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	return string(bytes)
 }

@@ -33,13 +33,13 @@ func GenerateAllTokens(email string, name string, uid string) (signedToken strin
 		Name:  name,
 		Uid:   uid,
 		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Local().Add(time.Hour * time.Duration(24)).Unix(),
+			ExpiresAt: time.Now().Local().Add(time.Hour * time.Duration(24) * 30).Unix(),
 		},
 	}
 
 	refreshClaims := &SignedDetails{
 		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Local().Add(time.Hour * time.Duration(168)).Unix(),
+			ExpiresAt: time.Now().Local().Add(time.Hour * time.Duration(24) * 90).Unix(),
 		},
 	}
 
@@ -52,7 +52,6 @@ func GenerateAllTokens(email string, name string, uid string) (signedToken strin
 	}
 
 	return token, refreshToken, err
-
 }
 
 func UpdateAllTokens(signedToken string, signedRefreshToken string, userId string) {
@@ -88,7 +87,6 @@ func UpdateAllTokens(signedToken string, signedRefreshToken string, userId strin
 		return
 	}
 	return
-
 }
 
 func ValidateToken(signedToken string) (claims *SignedDetails, msg string) {
@@ -118,5 +116,4 @@ func ValidateToken(signedToken string) (claims *SignedDetails, msg string) {
 	}
 
 	return claims, msg
-
 }
