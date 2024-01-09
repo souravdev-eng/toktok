@@ -90,6 +90,45 @@ func SignUp() gin.HandlerFunc {
 	}
 }
 
+func Login() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var errors []string
+
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+		defer cancel()
+
+		var user models.User
+		var foundUser models.User
+
+		if err := c.BindJSON(&user); err != nil {
+			errors = append(errors, "Invalid user input")
+			c.JSON(http.StatusBadRequest, gin.H{"errors": errors})
+			return
+		}
+
+		err := userCollection.FindOne(ctx, bson.M{"email": user.Email}).Decode(&foundUser)
+		if err != nil {
+			errors = append(errors, "Invalid email or password")
+			c.JSON(http.StatusBadRequest, gin.H{"error": errors})
+			return
+		}
+
+		passwordValid, msg := helper.VerifyPassword(*user.Password, *foundUser.Password)
+
+		if passwordValid != true {
+			errors = append(errors, msg)
+			c.JSON(http.StatusBadRequest, gin.H{"error": errors})
+			return
+		}
+
+		token, refreshToken, _ := helper.GenerateAllTokens(*foundUser.Email, *foundUser.Name, foundUser.User_id)
+		helper.UpdateAllTokens(token, refreshToken, foundUser.User_id)
+
+		//return statusOK
+		c.JSON(http.StatusOK, foundUser)
+	}
+}
+
 func getErrorMessage(err validator.FieldError) string {
 	switch err.Tag() {
 	case "required":

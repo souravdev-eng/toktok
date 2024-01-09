@@ -23,7 +23,7 @@ func VerifyPassword(userPassword string, providedPassword string) (bool, string)
 	msg := ""
 
 	if err != nil {
-		msg = fmt.Sprintf("login or password is incorrect")
+		msg = fmt.Sprintf("Invalid email or password")
 		check = false
 	}
 
